@@ -1,0 +1,19 @@
+{
+  "name": "daily-standup",
+  "version": "1.0.0",
+  "description": "A terminal-based daily standup and task manager",
+  "type": "module",
+  "bin": {
+    "standup": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js"
+  },
+  "keywords": ["cli", "standup", "tasks", "productivity"],
+  "author": "Natasha",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "inquirer": "^9.2.12"
+  }
+}

@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mathematical Beauty — Interactive Gallery</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07070f;--surface:#0f0f1e;--surface2:#181828;--border:#252540;
+  --blue:#60a5fa;--purple:#a78bfa;--green:#34d399;--orange:#fb923c;
+  --text:#e2e8f0;--muted:#8892a4;--dim:#3d4a5c
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;line-height:1.6}
+
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:50;height:56px;
+  background:rgba(7,7,15,.92);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 2rem
+}
+.brand{
+  font-weight:700;font-size:1rem;letter-spacing:-.01em;
+  background:linear-gradient(135deg,var(--blue),var(--purple));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text
+}
+nav ul{display:flex;gap:1.5rem;list-style:none}
+nav a{color:var(--muted);text-decoration:none;font-size:.875rem;transition:color .2s}
+nav a:hover{color:var(--blue)}
+
+.hero{padding:120px 1.5rem 64px;text-align:center}
+.hero h1{
+  font-size:clamp(2.5rem,7vw,4.5rem);font-weight:800;letter-spacing:-.03em;line-height:1.05;
+  background:linear-gradient(135deg,var(--blue) 0%,var(--purple) 40%,var(--orange) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:1.25rem
+}
+.hero p{font-size:1.1rem;color:var(--muted);max-width:560px;margin:0 auto;line-height:1.8}
+
+.section{max-width:1100px;margin:0 auto 80px;padding:0 1.5rem}
+.section-label{font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--purple);margin-bottom:.5rem}
+.section-title{font-size:1.875rem;font-weight:700;letter-spacing:-.02em;margin-bottom:.625rem}
+.section-body{color:var(--muted);max-width:56ch;font-size:.975rem;line-height:1.75;margin-bottom:1.5rem}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.canvas-wrap{position:relative;background:#000;line-height:0}
+.canvas-wrap canvas{width:100%;display:block;cursor:crosshair}
+.overlay{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.65);color:var(--blue);font-size:.875rem;letter-spacing:.05em;
+  transition:opacity .3s;pointer-events:none
+}
+.overlay.hidden{opacity:0}
+
+.controls{
+  padding:1rem 1.25rem;background:var(--surface2);border-top:1px solid var(--border);
+  display:flex;flex-wrap:wrap;gap:.75rem 1.75rem;align-items:center
+}
+.ctl{display:flex;align-items:center;gap:.625rem}
+label{font-size:.8125rem;color:var(--muted);white-space:nowrap}
+
+input[type=range]{-webkit-appearance:none;width:110px;height:3px;background:var(--border);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--blue);cursor:pointer;transition:transform .15s
+}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.3)}
+
+.val{font-size:.8125rem;font-weight:600;color:var(--blue);min-width:2.5ch;text-align:right}
+
+button{
+  padding:.375rem .875rem;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);cursor:pointer;font-size:.8125rem;transition:all .2s
+}
+button:hover{border-color:var(--blue);color:var(--blue)}
+button.primary{background:var(--blue);border-color:var(--blue);color:#000;font-weight:600}
+button.primary:hover{opacity:.85;color:#000}
+
+.note{padding:1rem 1.25rem;border-top:1px solid var(--border);color:var(--muted);font-size:.85rem;line-height:1.7}
+.note code{color:var(--blue);font-family:'Courier New',monospace;font-size:.8rem}
+
+footer{border-top:1px solid var(--border);padding:2.5rem 1.5rem;text-align:center;color:var(--dim);font-size:.875rem}
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">∞ Mathematical Beauty</span>
+  <ul>
+    <li><a href="#mandelbrot">Mandelbrot</a></li>
+    <li><a href="#lissajous">Lissajous</a></li>
+    <li><a href="#fourier">Fourier</a></li>
+    <li><a href="#primes">Primes</a></li>
+  </ul>
+</nav>
+
+<div class="hero">
+  <h1>Mathematical<br>Beauty</h1>
+  <p>An interactive exploration of mathematics — where infinite complexity emerges from finite rules, and hidden patterns appear in unexpected places.</p>
+</div>
+
+<!-- MANDELBROT -->
+<section class="section" id="mandelbrot">
+  <div class="section-label">Fractal Geometry</div>
+  <div class="section-title">The Mandelbrot Set</div>
+  <div class="section-body">The set of complex numbers <em>c</em> for which <code>z → z² + c</code> remains bounded. A simple rule producing infinite complexity at every scale. Click anywhere to zoom in — the boundary is infinitely detailed.</div>
+  <div class="card">
+    <div class="canvas-wrap">
+      <canvas id="mCanvas" width="800" height="450"></canvas>
+      <div class="overlay" id="mOverlay">Rendering…</div>
+    </div>
+    <div class="controls">
+      <div class="ctl">
+        <label>Iterations</label>
+        <input type="range" id="mIter" min="32" max="512" value="128" step="32">
+        <span class="val" id="mIterVal">128</span>
+      </div>
+      <button id="mReset">Reset View</button>
+      <button id="mRender" class="primary">Render</button>
+    </div>
+    <div class="note">Click to zoom 3× into that point. Points inside the set (black) never escape — colors encode <em>escape speed</em>. Higher iteration counts reveal finer detail near the boundary.</div>
+  </div>
+</section>
+
+<!-- LISSAJOUS -->
+<section class="section" id="lissajous">
+  <div class="section-label">Parametric Curves</div>
+  <div class="section-title">Lissajous Figures</div>
+  <div class="section-body">Named after Jules-Antoine Lissajous, these figures arise from two perpendicular harmonic motions: <code>x = sin(at + δ)</code>, <code>y = sin(bt)</code>. The phase δ slowly rotates, morphing the curve continuously. When a/b is rational, the curve closes.</div>
+  <div class="card">
+    <div class="canvas-wrap" style="background:var(--bg)">
+      <canvas id="lCanvas" width="800" height="450"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label>Freq a</label><input type="range" id="lA" min="1" max="9" value="3" step="1"><span class="val" id="lAVal">3</span></div>
+      <div class="ctl"><label>Freq b</label><input type="range" id="lB" min="1" max="9" value="2" step="1"><span class="val" id="lBVal">2</span></div>
+      <div class="ctl"><label>Speed</label><input type="range" id="lSpeed" min="1" max="20" value="6"><span class="val" id="lSpeedVal">6</span></div>
+      <button id="lPause">Pause</button>
+    </div>
+    <div class="note">Try <code>a=1 b=1</code> (ellipse) · <code>a=3 b=2</code> · <code>a=5 b=4</code>. When a and b share no common factors, patterns are most intricate. The phase drift means you see every possible rotation continuously.</div>
+  </div>
+</section>
+
+<!-- FOURIER -->
+<section class="section" id="fourier">
+  <div class="section-label">Harmonic Analysis</div>
+  <div class="section-title">Fourier Epicycles</div>
+  <div class="section-body">Any periodic signal decomposes into a sum of sine waves. Rotating circles (epicycles) at odd harmonics approximate a square wave — each circle's radius is <code>4/(π·n)</code>. The overshoot at discontinuities (~9%) never vanishes: the Gibbs phenomenon.</div>
+  <div class="card">
+    <div class="canvas-wrap" style="background:var(--bg)">
+      <canvas id="fCanvas" width="800" height="450"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label>Harmonics</label><input type="range" id="fN" min="1" max="40" value="5" step="1"><span class="val" id="fNVal">5</span></div>
+      <div class="ctl"><label>Speed</label><input type="range" id="fSpeed" min="1" max="10" value="3"><span class="val" id="fSpeedVal">3</span></div>
+      <button id="fPause">Pause</button>
+    </div>
+    <div class="note">Each new harmonic (1, 3, 5, 7 …) sharpens the edges. Drag <em>Harmonics</em> from 1 to 40 and watch the square wave emerge. The persistent ringing at corners is the Gibbs phenomenon — a fundamental property of Fourier series.</div>
+  </div>
+</section>
+
+<!-- ULAM SPIRAL -->
+<section class="section" id="primes">
+  <div class="section-label">Number Theory</div>
+  <div class="section-title">The Ulam Spiral</div>
+  <div class="section-body">In 1963, Stanisław Ulam doodled integers in a spiral during a lecture and noticed primes cluster on diagonal lines — a pattern still not fully explained. Colors show the angular position in the spiral, revealing diagonal structure.</div>
+  <div class="card">
+    <div class="canvas-wrap" style="background:var(--surface)">
+      <canvas id="uCanvas" width="800" height="450"></canvas>
+    </div>
+    <div class="controls">
+      <div class="ctl"><label>Grid size</label><input type="range" id="uSize" min="21" max="201" value="101" step="10"><span class="val" id="uSizeVal">101</span></div>
+      <div class="ctl"><label style="color:var(--blue)">■</label><label>Primes</label><label style="color:var(--dim)">■</label><label>Composites</label></div>
+      <button id="uRender" class="primary">Redraw</button>
+    </div>
+    <div class="note">The diagonals hint that quadratic polynomials like Euler's <code>n² + n + 41</code> generate primes at exceptional rates. Increase the grid size to see the diagonals sharpen across hundreds of numbers.</div>
+  </div>
+</section>
+
+<footer>Built with curiosity — each equation a window into the infinite</footer>
+
+<script>
+// ── UTILITIES ────────────────────────────────────────────────────
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(1, s));
+  l = Math.max(0, Math.min(1, l));
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); };
+  return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+function sieve(n) {
+  const p = new Uint8Array(n + 1).fill(1);
+  p[0] = p[1] = 0;
+  for (let i = 2; i * i <= n; i++) if (p[i]) for (let j = i * i; j <= n; j += i) p[j] = 0;
+  return p;
+}
+
+// ── MANDELBROT ───────────────────────────────────────────────────
+const mCanvas = document.getElementById('mCanvas');
+const mCtx = mCanvas.getContext('2d');
+const mOverlay = document.getElementById('mOverlay');
+let mView = { xmin: -2.5, xmax: 1.0, ymin: -1.25, ymax: 1.25 };
+let mMaxIter = 128;
+let mBusy = false;
+
+function renderMandelbrot() {
+  if (mBusy) return;
+  mBusy = true;
+  mOverlay.classList.remove('hidden');
+
+  setTimeout(() => {
+    const W = mCanvas.width, H = mCanvas.height;
+    const img = mCtx.createImageData(W, H);
+    const d = img.data;
+    const { xmin, xmax, ymin, ymax } = mView;
+    const mi = mMaxIter;
+
+    for (let py = 0; py < H; py++) {
+      for (let px = 0; px < W; px++) {
+        const cr = xmin + (px / W) * (xmax - xmin);
+        const ci = ymin + (py / H) * (ymax - ymin);
+        let zr = 0, zi = 0, n = 0;
+
+        while (n < mi) {
+          const zr2 = zr * zr, zi2 = zi * zi;
+          if (zr2 + zi2 > 4) break;
+          zi = 2 * zr * zi + ci;
+          zr = zr2 - zi2 + cr;
+          n++;
+        }
+
+        const i4 = (py * W + px) * 4;
+        if (n === mi) {
+          d[i4] = d[i4+1] = d[i4+2] = 0;
+        } else {
+          const absz2 = zr * zr + zi * zi;
+          const lnAbsz = 0.5 * Math.log(absz2);
+          const smooth = n + 1 - Math.log2(Math.max(1e-10, lnAbsz) / Math.LN2);
+          const t = (smooth / mi * 5) % 1;
+          const hue = (t * 280 + 200) % 360;
+          const [r, g, b] = hslToRgb(hue, 0.85, 0.35 + t * 0.3);
+          d[i4] = r; d[i4+1] = g; d[i4+2] = b;
+        }
+        d[i4+3] = 255;
+      }
+    }
+
+    mCtx.putImageData(img, 0, 0);
+    mOverlay.classList.add('hidden');
+    mBusy = false;
+  }, 30);
+}
+
+document.getElementById('mIter').addEventListener('input', e => {
+  mMaxIter = +e.target.value;
+  document.getElementById('mIterVal').textContent = mMaxIter;
+});
+document.getElementById('mReset').addEventListener('click', () => {
+  mView = { xmin: -2.5, xmax: 1.0, ymin: -1.25, ymax: 1.25 };
+  renderMandelbrot();
+});
+document.getElementById('mRender').addEventListener('click', renderMandelbrot);
+mCanvas.addEventListener('click', e => {
+  const r = mCanvas.getBoundingClientRect();
+  const px = (e.clientX - r.left) / r.width;
+  const py = (e.clientY - r.top) / r.height;
+  const cx = mView.xmin + px * (mView.xmax - mView.xmin);
+  const cy = mView.ymin + py * (mView.ymax - mView.ymin);
+  const w = (mView.xmax - mView.xmin) / 3;
+  const h = (mView.ymax - mView.ymin) / 3;
+  mView = { xmin: cx - w/2, xmax: cx + w/2, ymin: cy - h/2, ymax: cy + h/2 };
+  renderMandelbrot();
+});
+
+renderMandelbrot();
+
+// ── LISSAJOUS ────────────────────────────────────────────────────
+const lCanvas = document.getElementById('lCanvas');
+const lCtx = lCanvas.getContext('2d');
+let lA = 3, lB = 2, lSpeed = 6, lPhase = 0, lPaused = false;
+
+function drawLissajous() {
+  const W = lCanvas.width, H = lCanvas.height;
+  lCtx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) * 0.42;
+
+  // Faint axes
+  lCtx.strokeStyle = 'rgba(37,37,64,.7)';
+  lCtx.lineWidth = 1;
+  lCtx.beginPath();
+  lCtx.moveTo(cx, 0); lCtx.lineTo(cx, H);
+  lCtx.moveTo(0, cy); lCtx.lineTo(W, cy);
+  lCtx.stroke();
+
+  // Draw curve in 24 colored segments for gradient effect
+  const SEGS = 24, PTS = 84;
+  for (let s = 0; s < SEGS; s++) {
+    const hue = ((s / SEGS) * 300 + 190) % 360;
+    lCtx.strokeStyle = `hsl(${hue},82%,58%)`;
+    lCtx.lineWidth = 2.2;
+    lCtx.lineJoin = 'round';
+    lCtx.beginPath();
+    let first = true;
+    for (let i = 0; i <= PTS; i++) {
+      const t = ((s * PTS + i) / (SEGS * PTS)) * 2 * Math.PI;
+      const x = cx + R * Math.sin(lA * t + lPhase);
+      const y = cy + R * Math.sin(lB * t);
+      first ? (lCtx.moveTo(x, y), first = false) : lCtx.lineTo(x, y);
+    }
+    lCtx.stroke();
+  }
+
+  lPhase += lSpeed * 0.0025;
+  if (!lPaused) requestAnimationFrame(drawLissajous);
+}
+
+document.getElementById('lA').addEventListener('input', e => { lA = +e.target.value; document.getElementById('lAVal').textContent = lA; });
+document.getElementById('lB').addEventListener('input', e => { lB = +e.target.value; document.getElementById('lBVal').textContent = lB; });
+document.getElementById('lSpeed').addEventListener('input', e => { lSpeed = +e.target.value; document.getElementById('lSpeedVal').textContent = lSpeed; });
+const lBtn = document.getElementById('lPause');
+lBtn.addEventListener('click', () => {
+  lPaused = !lPaused;
+  lBtn.textContent = lPaused ? 'Resume' : 'Pause';
+  if (!lPaused) drawLissajous();
+});
+
+drawLissajous();
+
+// ── FOURIER EPICYCLES ─────────────────────────────────────────────
+const fCanvas = document.getElementById('fCanvas');
+const fCtx = fCanvas.getContext('2d');
+let fN = 5, fSpeed = 3, fPaused = false, fTime = 0;
+let fHistory = [];
+
+const WAVE_START_FRAC = 0.44;
+
+function drawFourier() {
+  const W = fCanvas.width, H = fCanvas.height;
+  fCtx.clearRect(0, 0, W, H);
+
+  const pivX = W * 0.28, pivY = H / 2;
+  const waveX = W * WAVE_START_FRAC;
+  const waveW = W * (1 - WAVE_START_FRAC - 0.02);
+  const maxHist = Math.floor(waveW);
+  const amp = H * 0.38;
+
+  // Vertical divider
+  fCtx.strokeStyle = 'rgba(37,37,64,.6)';
+  fCtx.setLineDash([4,5]);
+  fCtx.lineWidth = 1;
+  fCtx.beginPath(); fCtx.moveTo(waveX - 6, 0); fCtx.lineTo(waveX - 6, H); fCtx.stroke();
+  fCtx.setLineDash([]);
+
+  // Draw epicycles
+  let x = pivX, y = pivY;
+  const dt = fTime * fSpeed * 0.018;
+
+  for (let k = 0; k < fN; k++) {
+    const n = 2 * k + 1;
+    const r = (4 / Math.PI) * (1 / n) * amp;
+    const angle = n * dt;
+    const nx = x + r * Math.cos(angle);
+    const ny = y + r * Math.sin(angle);
+
+    // Circle
+    fCtx.beginPath();
+    fCtx.arc(x, y, r, 0, Math.PI * 2);
+    fCtx.strokeStyle = `rgba(96,165,250,${0.1 + 0.12 * (1 - k / fN)})`;
+    fCtx.lineWidth = 1;
+    fCtx.stroke();
+
+    // Spoke
+    fCtx.beginPath(); fCtx.moveTo(x, y); fCtx.lineTo(nx, ny);
+    fCtx.strokeStyle = `rgba(167,139,250,${0.55 + 0.35 * (1 - k / fN)})`;
+    fCtx.lineWidth = 1.5;
+    fCtx.stroke();
+
+    x = nx; y = ny;
+  }
+
+  // Tip dot
+  fCtx.beginPath(); fCtx.arc(x, y, 3.5, 0, Math.PI * 2);
+  fCtx.fillStyle = '#60a5fa'; fCtx.fill();
+
+  // Record history
+  fHistory.push(y);
+  if (fHistory.length > maxHist) fHistory.shift();
+
+  // Connector line from tip to wave current point
+  const currWX = waveX + fHistory.length - 1;
+  fCtx.setLineDash([3,5]);
+  fCtx.strokeStyle = 'rgba(96,165,250,.35)';
+  fCtx.lineWidth = 1;
+  fCtx.beginPath(); fCtx.moveTo(x, y); fCtx.lineTo(currWX, y); fCtx.stroke();
+  fCtx.setLineDash([]);
+
+  // Wave path
+  if (fHistory.length > 1) {
+    fCtx.beginPath();
+    for (let i = 0; i < fHistory.length; i++) {
+      const wx = waveX + i;
+      i === 0 ? fCtx.moveTo(wx, fHistory[i]) : fCtx.lineTo(wx, fHistory[i]);
+    }
+    fCtx.strokeStyle = '#60a5fa';
+    fCtx.lineWidth = 2;
+    fCtx.stroke();
+  }
+
+  fTime++;
+  if (!fPaused) requestAnimationFrame(drawFourier);
+}
+
+document.getElementById('fN').addEventListener('input', e => {
+  fN = +e.target.value;
+  document.getElementById('fNVal').textContent = fN;
+  fHistory = [];
+});
+document.getElementById('fSpeed').addEventListener('input', e => {
+  fSpeed = +e.target.value;
+  document.getElementById('fSpeedVal').textContent = fSpeed;
+  fHistory = [];
+});
+const fBtn = document.getElementById('fPause');
+fBtn.addEventListener('click', () => {
+  fPaused = !fPaused;
+  fBtn.textContent = fPaused ? 'Resume' : 'Pause';
+  if (!fPaused) drawFourier();
+});
+
+drawFourier();
+
+// ── ULAM SPIRAL ──────────────────────────────────────────────────
+const uCanvas = document.getElementById('uCanvas');
+const uCtx = uCanvas.getContext('2d');
+
+function drawUlam(size) {
+  // Ensure odd
+  if (size % 2 === 0) size++;
+  const W = uCanvas.width, H = uCanvas.height;
+  const cell = Math.min(W / size, H / size);
+  const offX = (W - size * cell) / 2;
+  const offY = (H - size * cell) / 2;
+  const total = size * size;
+  const primes = sieve(total);
+
+  uCtx.fillStyle = '#0a0a14';
+  uCtx.fillRect(0, 0, W, H);
+
+  // Spiral: right, up, left, down
+  const dirs = [[1, 0], [0, -1], [-1, 0], [0, 1]];
+  let sx = Math.floor(size / 2), sy = Math.floor(size / 2);
+  let dirIdx = 0, steps = 1, stepCount = 0, turnCount = 0;
+
+  const cs = Math.max(1, cell - (cell > 3 ? 1 : 0));
+
+  for (let n = 1; n <= total; n++) {
+    const px = offX + sx * cell;
+    const py = offY + sy * cell;
+
+    if (primes[n]) {
+      const angle = Math.atan2(sy - size / 2, sx - size / 2);
+      const hue = ((angle / Math.PI) * 180 + 220) % 360;
+      const dist = Math.hypot(sx - size / 2, sy - size / 2) / (size / 2);
+      uCtx.fillStyle = `hsl(${hue},70%,${48 + dist * 18}%)`;
+    } else {
+      uCtx.fillStyle = n === 1 ? '#2a2a50' : '#10101e';
+    }
+
+    uCtx.fillRect(px, py, cs, cs);
+
+    // Advance spiral
+    const [dx, dy] = dirs[dirIdx];
+    sx += dx; sy += dy;
+    stepCount++;
+    if (stepCount === steps) {
+      stepCount = 0;
+      dirIdx = (dirIdx + 1) % 4;
+      turnCount++;
+      if (turnCount % 2 === 0) steps++;
+    }
+  }
+}
+
+const uSizeSlider = document.getElementById('uSize');
+const uSizeVal = document.getElementById('uSizeVal');
+uSizeSlider.addEventListener('input', e => {
+  let v = +e.target.value;
+  if (v % 2 === 0) v++;
+  uSizeVal.textContent = v;
+});
+document.getElementById('uRender').addEventListener('click', () => {
+  let v = +uSizeSlider.value;
+  if (v % 2 === 0) v++;
+  drawUlam(v);
+});
+
+drawUlam(101);
+</script>
+</body>
+</html>

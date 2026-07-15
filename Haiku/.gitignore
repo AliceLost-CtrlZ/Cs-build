@@ -1,0 +1,4 @@
+node_modules/
+.standup.json
+.DS_Store
+*.log

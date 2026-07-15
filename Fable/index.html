@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terrarium</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0c10; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: pointer; }
+  #hud {
+    position: fixed; left: 14px; bottom: 12px;
+    font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: rgba(255,255,255,.55); user-select: none; pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"></div>
+<script>
+"use strict";
+// ---------------------------------------------------------------------------
+// Terrarium — a seeded garden that grows itself.
+// Every seed word grows the same garden, forever. Click to replant.
+// ---------------------------------------------------------------------------
+
+const TAU = Math.PI * 2;
+const canvas = document.getElementById("c");
+const hud = document.getElementById("hud");
+const ctx = canvas.getContext("2d");
+
+// --- seeded randomness ------------------------------------------------------
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function () {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const ADJ = ["quiet","amber","hollow","paper","velvet","early","liminal","mossy",
+             "slow","glass","feral","tidal","patient","umbral","gentle","copper"];
+const NOUN = ["fern","thistle","ember","meadow","lantern","sparrow","willow","comet",
+              "reed","cinder","orchid","harbor","moth","clover","aster","fable"];
+
+function randomSeedWord() {
+  const a = ADJ[Math.floor(Math.random() * ADJ.length)];
+  const n = NOUN[Math.floor(Math.random() * NOUN.length)];
+  return a + "-" + n;
+}
+
+// --- palettes: hour of the terrarium's day ----------------------------------
+const PALETTES = [
+  { name: "dawn",
+    skyTop: "#3a2e4f", skyBot: "#e8927c", orb: "#ffd9a0", orbGlow: "rgba(255,190,120,.35)",
+    hills: ["#4a3d5e", "#3b3350"], ground: "#2e2b3f",
+    stems: ["#5a4a63", "#6b5a70"], leaves: ["#8a7f9e", "#a8909a", "#c9a3a0"],
+    flowers: ["#ffd9a0", "#f4a988", "#e8c3b0"], mote: "rgba(255,220,180,", stars: 0 },
+  { name: "noon",
+    skyTop: "#7ec8e3", skyBot: "#dff3e4", orb: "#fffbe8", orbGlow: "rgba(255,250,220,.5)",
+    hills: ["#9fd0a8", "#7ab890"], ground: "#5e9c6b",
+    stems: ["#3f7048", "#4d7f52"], leaves: ["#5eab63", "#7fc46f", "#a4d67d"],
+    flowers: ["#ffffff", "#ffd166", "#ef8fb0"], mote: "rgba(255,255,255,", stars: 0 },
+  { name: "dusk",
+    skyTop: "#1e2a52", skyBot: "#c96f5e", orb: "#ff9e6d", orbGlow: "rgba(255,140,90,.3)",
+    hills: ["#33355e", "#2a2d4f"], ground: "#252842",
+    stems: ["#4a4666", "#585073"], leaves: ["#6f6b94", "#8f7a9e", "#b08a94"],
+    flowers: ["#ffb37e", "#f28d85", "#e0a4c4"], mote: "rgba(255,190,140,", stars: 0.3 },
+  { name: "night",
+    skyTop: "#070912", skyBot: "#1b2440", orb: "#e8ecff", orbGlow: "rgba(190,205,255,.25)",
+    hills: ["#141a30", "#101527"], ground: "#0e1322",
+    stems: ["#2c3654", "#38425f"], leaves: ["#3e5378", "#4d6b8a", "#5f83a0"],
+    flowers: ["#cfe0ff", "#9fb8e8", "#e8f0ff"], mote: "rgba(190,255,170,", stars: 1 },
+  { name: "mist",
+    skyTop: "#8e9aa8", skyBot: "#d8dde2", orb: "#f2f4f6", orbGlow: "rgba(240,244,248,.4)",
+    hills: ["#a4aeb8", "#8c98a4"], ground: "#7d8a90",
+    stems: ["#5c6a6e", "#6a787a"], leaves: ["#7f9490", "#93a89e", "#aebfb2"],
+    flowers: ["#f4f6f4", "#dce8dc", "#c9d8d4"], mote: "rgba(255,255,255,", stars: 0 },
+];
+
+// --- garden generation ------------------------------------------------------
+// All geometry is stored in fractions of viewport size so resize just redraws.
+
+let garden = null;
+let seedWord = (location.hash || "").replace(/^#/, "") || randomSeedWord();
+let epoch = performance.now();
+
+function genSegment(rng, depth, maxDepth, len, width, spread) {
+  const seg = {
+    angle: (rng() - 0.5) * spread * (depth === 0 ? 0.4 : 1),
+    len: len * (0.85 + rng() * 0.3),
+    width: width,
+    depthNorm: depth / maxDepth,
+    phase: rng() * TAU,
+    t0: (depth / (maxDepth + 1)) * 0.75 + rng() * 0.08,
+    tSpan: 0.18 + rng() * 0.1,
+    children: [],
+    leaf: null,
+    flower: null,
+  };
+  if (depth < maxDepth) {
+    const n = depth === 0 ? 1 + (rng() < 0.6 ? 1 : 0) : (rng() < 0.75 ? 2 : 1);
+    for (let i = 0; i < n; i++) {
+      seg.children.push(genSegment(rng, depth + 1, maxDepth,
+        len * (0.68 + rng() * 0.14), Math.max(0.6, width * 0.62), spread));
+    }
+    if (depth > 0 && rng() < 0.45) {
+      seg.leaf = { side: rng() < 0.5 ? -1 : 1, size: 0.5 + rng() * 0.6, ci: Math.floor(rng() * 3) };
+    }
+  } else {
+    if (rng() < 0.55) seg.flower = { size: 0.7 + rng() * 0.7, ci: Math.floor(rng() * 3), petals: 5 + Math.floor(rng() * 3) };
+    else seg.leaf = { side: rng() < 0.5 ? -1 : 1, size: 0.8 + rng() * 0.6, ci: Math.floor(rng() * 3) };
+  }
+  return seg;
+}
+
+function generate(word) {
+  const rng = mulberry32(xmur3(word)());
+  const pal = PALETTES[Math.floor(rng() * PALETTES.length)];
+  const groundY = 0.78 + rng() * 0.08;
+
+  const plants = [];
+  const nPlants = 5 + Math.floor(rng() * 4);
+  for (let i = 0; i < nPlants; i++) {
+    const maxDepth = 4 + Math.floor(rng() * 3);
+    plants.push({
+      x: 0.08 + (i + rng() * 0.7) / nPlants * 0.86,
+      scale: 0.5 + rng() * 0.7,
+      swayAmp: 0.02 + rng() * 0.035,
+      swaySpeed: 0.4 + rng() * 0.5,
+      stemCi: Math.floor(rng() * 2),
+      root: genSegment(rng, 0, maxDepth, 0.09 + rng() * 0.04, 4.5 + rng() * 3, 0.9 + rng() * 0.5),
+    });
+  }
+  plants.sort((a, b) => a.scale - b.scale); // small ones behind
+
+  const grass = [];
+  const nGrass = 90 + Math.floor(rng() * 60);
+  for (let i = 0; i < nGrass; i++) {
+    grass.push({ x: rng(), h: 0.015 + rng() * 0.03, lean: (rng() - 0.5) * 0.8,
+                 phase: rng() * TAU, ci: Math.floor(rng() * 3), t0: rng() * 0.4 });
+  }
+
+  const motes = [];
+  for (let i = 0; i < 26; i++) {
+    motes.push({ x: rng(), y: rng() * groundY, r: 0.8 + rng() * 1.6,
+                 vx: (rng() - 0.5) * 0.008, vy: -0.002 - rng() * 0.004,
+                 phase: rng() * TAU, blink: 0.5 + rng() * 2 });
+  }
+
+  const stars = [];
+  if (pal.stars > 0) {
+    const n = Math.floor(90 * pal.stars);
+    for (let i = 0; i < n; i++) {
+      stars.push({ x: rng(), y: rng() * groundY * 0.85, r: 0.4 + rng() * 1.1, phase: rng() * TAU });
+    }
+  }
+
+  const hills = [];
+  for (let h = 0; h < 2; h++) {
+    const pts = [];
+    const n = 6;
+    for (let i = 0; i <= n; i++) {
+      pts.push({ x: i / n, y: groundY - 0.05 - h * 0.05 - rng() * 0.09 });
+    }
+    hills.push(pts);
+  }
+
+  return {
+    word, pal, groundY, plants, grass, motes, stars, hills,
+    orbX: 0.15 + rng() * 0.7, orbY: 0.12 + rng() * 0.25, orbR: 0.03 + rng() * 0.025,
+  };
+}
+
+// --- drawing ----------------------------------------------------------------
+function smooth(t) { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); }
+
+function drawSegment(seg, x, y, baseAngle, growT, time, plant, w, h) {
+  const g = smooth((growT - seg.t0) / seg.tSpan);
+  if (g <= 0) return;
+  const sway = Math.sin(time * plant.swaySpeed + seg.phase) * plant.swayAmp * (0.2 + seg.depthNorm);
+  const angle = baseAngle + seg.angle + sway;
+  const len = seg.len * plant.scale * g * h;
+  const x1 = x + Math.cos(angle) * len;
+  const y1 = y + Math.sin(angle) * len;
+
+  ctx.strokeStyle = garden.pal.stems[plant.stemCi];
+  ctx.lineWidth = Math.max(0.6, seg.width * plant.scale * (h / 800));
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+
+  if (g < 1) return;
+
+  if (seg.leaf) {
+    const lg = smooth((growT - seg.t0 - seg.tSpan) / 0.15);
+    if (lg > 0) drawLeaf(x1, y1, angle + seg.leaf.side * 0.9 + sway, seg.leaf, lg, plant, h);
+  }
+  if (seg.flower) {
+    const fg = smooth((growT - seg.t0 - seg.tSpan) / 0.2);
+    if (fg > 0) drawFlower(x1, y1, seg.flower, fg, plant, h, time);
+  }
+  for (const child of seg.children) {
+    drawSegment(child, x1, y1, angle, growT, time, plant, w, h);
+  }
+}
+
+function drawLeaf(x, y, angle, leaf, g, plant, h) {
+  const s = leaf.size * plant.scale * g * (h / 90);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = garden.pal.leaves[leaf.ci];
+  ctx.beginPath();
+  ctx.ellipse(s * 0.55, 0, s * 0.6, s * 0.22, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawFlower(x, y, flower, g, plant, h, time) {
+  const s = flower.size * plant.scale * g * (h / 160);
+  const col = garden.pal.flowers[flower.ci];
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(time * 0.05 + flower.ci);
+  ctx.fillStyle = col;
+  for (let i = 0; i < flower.petals; i++) {
+    ctx.rotate(TAU / flower.petals);
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, 0, s * 0.5, s * 0.2, 0, 0, TAU);
+    ctx.fill();
+  }
+  ctx.fillStyle = garden.pal.orb;
+  ctx.beginPath();
+  ctx.arc(0, 0, s * 0.18, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
+function draw(now) {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (w === 0 || h === 0) { requestAnimationFrame(draw); return; }
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) resize();
+  const time = now / 1000;
+  const growT = Math.min(1, (now - epoch) / 9000); // the garden takes 9s to grow
+  const pal = garden.pal;
+  const gy = garden.groundY * h;
+
+  // sky
+  const sky = ctx.createLinearGradient(0, 0, 0, gy);
+  sky.addColorStop(0, pal.skyTop);
+  sky.addColorStop(1, pal.skyBot);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+
+  // stars
+  for (const st of garden.stars) {
+    const tw = 0.5 + 0.5 * Math.sin(time * 1.3 + st.phase);
+    ctx.fillStyle = `rgba(230,238,255,${0.25 + 0.6 * tw})`;
+    ctx.beginPath();
+    ctx.arc(st.x * w, st.y * h, st.r, 0, TAU);
+    ctx.fill();
+  }
+
+  // orb (sun or moon)
+  const ox = garden.orbX * w, oy = garden.orbY * h, or_ = garden.orbR * h;
+  const glow = ctx.createRadialGradient(ox, oy, or_ * 0.3, ox, oy, or_ * 5);
+  glow.addColorStop(0, pal.orbGlow);
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(ox - or_ * 5, oy - or_ * 5, or_ * 10, or_ * 10);
+  ctx.fillStyle = pal.orb;
+  ctx.beginPath();
+  ctx.arc(ox, oy, or_, 0, TAU);
+  ctx.fill();
+
+  // hills
+  garden.hills.forEach((pts, i) => {
+    ctx.fillStyle = pal.hills[i];
+    ctx.beginPath();
+    ctx.moveTo(-10, h);
+    ctx.lineTo(-10, pts[0].y * h);
+    for (let k = 1; k < pts.length; k++) {
+      const p0 = pts[k - 1], p1 = pts[k];
+      const mx = ((p0.x + p1.x) / 2) * w;
+      ctx.quadraticCurveTo(p0.x * w, p0.y * h, mx, ((p0.y + p1.y) / 2) * h);
+    }
+    ctx.lineTo(w + 10, pts[pts.length - 1].y * h);
+    ctx.lineTo(w + 10, h);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // ground
+  ctx.fillStyle = pal.ground;
+  ctx.fillRect(0, gy, w, h - gy);
+
+  // grass
+  for (const gr of garden.grass) {
+    const gg = smooth((growT - gr.t0) / 0.3);
+    if (gg <= 0) continue;
+    const bx = gr.x * w;
+    const bh = gr.h * h * gg;
+    const swy = Math.sin(time * 0.9 + gr.phase) * 3;
+    ctx.strokeStyle = pal.leaves[gr.ci];
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(bx, gy + 2);
+    ctx.quadraticCurveTo(bx + gr.lean * bh * 0.5, gy - bh * 0.6,
+                         bx + gr.lean * bh + swy, gy - bh);
+    ctx.stroke();
+  }
+
+  // plants
+  for (const plant of garden.plants) {
+    drawSegment(plant.root, plant.x * w, gy + 2, -Math.PI / 2, growT, time, plant, w, h);
+  }
+
+  // motes / fireflies
+  for (const m of garden.motes) {
+    m.x += m.vx * 0.016; m.y += m.vy * 0.016;
+    if (m.y < -0.02) { m.y = garden.groundY; m.x = Math.random(); }
+    if (m.x < -0.02) m.x = 1.02;
+    if (m.x > 1.02) m.x = -0.02;
+    const a = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(time * m.blink + m.phase));
+    ctx.fillStyle = pal.mote + a + ")";
+    ctx.beginPath();
+    ctx.arc(m.x * w, m.y * h + Math.sin(time + m.phase) * 4, m.r, 0, TAU);
+    ctx.fill();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// --- wiring -----------------------------------------------------------------
+function resize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  if (cw === 0 || ch === 0) return;
+  canvas.width = Math.floor(cw * dpr);
+  canvas.height = Math.floor(ch * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function plant(word) {
+  seedWord = word;
+  location.hash = word;
+  garden = generate(word);
+  epoch = performance.now();
+  hud.textContent = garden.pal.name + " · seed: " + word + " · click to replant";
+}
+
+canvas.addEventListener("click", () => plant(randomSeedWord()));
+window.addEventListener("hashchange", () => {
+  const word = (location.hash || "").replace(/^#/, "");
+  if (word && word !== seedWord) plant(word);
+});
+window.addEventListener("resize", resize);
+
+resize();
+plant(seedWord);
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

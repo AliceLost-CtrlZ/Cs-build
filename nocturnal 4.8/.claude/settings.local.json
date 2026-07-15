@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "Bash(command -v python python3 py)",
+      "Bash(npx --version)",
+      "Bash(winget install *)",
+      "Bash(/c/Users/NatashaVresnik/AppData/Local/Microsoft/WinGet/Packages/OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe/node-v24.18.0-win-x64/node.exe --version)",
+      "Bash(/c/Users/NatashaVresnik/AppData/Local/Microsoft/WinGet/Packages/OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe/node-v24.18.0-win-x64/node.exe /c/Users/NatashaVresnik/AppData/Local/Microsoft/WinGet/Packages/OpenJS.NodeJS.LTS_Microsoft.Winget.Source_8wekyb3d8bbwe/node-v24.18.0-win-x64/node_modules/npm/bin/npm-cli.js --version)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:8791/nocturne.html)",
+      "Bash(echo \"== memory dir ==\")",
+      "Read(//c/Users/NatashaVresnik/.claude/projects/C--Users-NatashaVresnik-OneDrive---NV-Consulting-Desktop-house-of-4-8/**)",
+      "Bash(echo \"\\(none\\)\")",
+      "Bash(echo)",
+      "Bash(echo \"== user CLAUDE.md \\(~/.claude\\) ==\")"
+    ]
+  }
+}

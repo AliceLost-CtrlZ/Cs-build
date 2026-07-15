@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sandbox — Falling Sand Physics</title>
+<style>
+  :root {
+    --bg: #0b0e14;
+    --panel: #12161f;
+    --panel-border: #232938;
+    --text: #e6e9f0;
+    --text-dim: #8892a6;
+    --accent: #5fb3ff;
+    --accent-dim: #2a4a66;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    height: 100%;
+    overflow: hidden;
+  }
+  #app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+  #sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  #sidebar h1 {
+    font-size: 16px;
+    margin: 0 0 2px 0;
+    letter-spacing: 0.3px;
+  }
+  #sidebar .sub {
+    font-size: 11.5px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    line-height: 1.5;
+  }
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .section-title {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+    font-weight: 600;
+  }
+  #palette {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .elbtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #171c27;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    padding: 7px 8px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 12px;
+    text-align: left;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .elbtn:hover { background: #1c2230; }
+  .elbtn.active {
+    border-color: var(--accent);
+    background: #182534;
+    box-shadow: 0 0 0 1px var(--accent-dim) inset;
+  }
+  .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  .key {
+    margin-left: auto;
+    font-size: 9.5px;
+    color: var(--text-dim);
+    background: #0e1119;
+    border: 1px solid var(--panel-border);
+    border-radius: 3px;
+    padding: 1px 4px;
+    min-width: 14px;
+    text-align: center;
+  }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .btn {
+    background: #171c27;
+    border: 1px solid var(--panel-border);
+    border-radius: 7px;
+    padding: 8px 10px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12.5px;
+    flex: 1;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .btn:hover { background: #1c2230; }
+  .btn.primary {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: #dff0ff;
+  }
+  .btn.primary:hover { background: #345f82; }
+  label.small {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+  #stats {
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    border-top: 1px solid var(--panel-border);
+    padding-top: 10px;
+  }
+  #stats span { color: var(--text); }
+  #canvasWrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse at center, #10141d 0%, #05070a 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  canvas#view {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 1px solid #262d3d;
+    border-radius: 4px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    cursor: crosshair;
+    max-width: 96%;
+    max-height: 96%;
+  }
+  #hint {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: rgba(18,22,31,0.85);
+    border: 1px solid var(--panel-border);
+    padding: 5px 12px;
+    border-radius: 20px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #232938; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <div>
+      <h1>Sandbox</h1>
+      <div class="sub">A falling-sand physics toy. Pick a material, drag on the canvas to place it, and watch the simulation take over.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Materials</div>
+      <div id="palette"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Brush</div>
+      <label class="small">Size <span id="brushSizeLabel">4</span></label>
+      <input type="range" id="brushSize" min="1" max="20" value="4">
+    </div>
+
+    <div class="section">
+      <div class="section-title">Simulation</div>
+      <div class="row">
+        <button class="btn primary" id="playBtn">Pause</button>
+        <button class="btn" id="stepBtn">Step</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="clearBtn">Clear</button>
+        <button class="btn" id="wallsBtn">Add Walls</button>
+      </div>
+      <label class="small">Speed <span id="speedLabel">1x</span></label>
+      <input type="range" id="speed" min="1" max="4" value="1">
+    </div>
+
+    <div id="stats">
+      FPS: <span id="fps">--</span><br>
+      Active cells: <span id="count">0</span><br>
+      Material: <span id="curMat">Sand</span>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <canvas id="view"></canvas>
+    <div id="hint">Left-click drag to paint · Right-click to erase · Space = pause · C = clear</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Element definitions ----------
+  const EMPTY=0, SAND=1, WATER=2, STONE=3, WOOD=4, FIRE=5, SMOKE=6,
+        OIL=7, ACID=8, PLANT=9, LAVA=10, ICE=11, STEAM=12;
+
+  const ELEMENTS = [
+    { id: SAND,  name: "Sand",  key: "1", color: [217,180,102] },
+    { id: WATER, name: "Water", key: "2", color: [47,111,237] },
+    { id: STONE, name: "Stone", key: "3", color: [107,107,112] },
+    { id: WOOD,  name: "Wood",  key: "4", color: [122,74,43] },
+    { id: FIRE,  name: "Fire",  key: "5", color: [255,106,31] },
+    { id: SMOKE, name: "Smoke", key: "6", color: [85,91,99] },
+    { id: OIL,   name: "Oil",   key: "7", color: [42,33,24] },
+    { id: ACID,  name: "Acid",  key: "8", color: [143,212,0] },
+    { id: PLANT, name: "Plant", key: "9", color: [47,158,68] },
+    { id: LAVA,  name: "Lava",  key: "0", color: [255,77,28] },
+    { id: ICE,   name: "Ice",   key: "-", color: [191,233,255] },
+    { id: STEAM, name: "Steam", key: "=", color: [201,211,218] },
+  ];
+  const ERASER = { id: EMPTY, name: "Eraser", key: "E", color: [20,24,32] };
+
+  function density(t) {
+    switch (t) {
+      case SAND: return 5;
+      case LAVA: return 4;
+      case ACID: return 3;
+      case WATER: return 2;
+      case OIL: return 1;
+      default: return 0;
+    }
+  }
+  const isLiquid = t => t===WATER||t===OIL||t===ACID||t===LAVA;
+  const isGas = t => t===SMOKE||t===STEAM;
+  const isFlammable = t => t===WOOD||t===PLANT||t===OIL;
+
+  // ---------- Grid setup ----------
+  const W = 180, H = 108, CELL = 6;
+  const N = W * H;
+  const type = new Uint8Array(N);
+  const extra = new Uint16Array(N);   // lifetime counters
+  const seed = new Uint8Array(N);     // stable per-particle color noise
+  const moved = new Uint8Array(N);
+
+  const idx = (x, y) => y * W + x;
+  const inBounds = (x, y) => x >= 0 && x < W && y >= 0 && y < H;
+
+  function setCell(i, t, ex = 0) {
+    type[i] = t;
+    extra[i] = ex;
+    if (t !== EMPTY) seed[i] = (Math.random() * 256) | 0;
+  }
+
+  function swap(i, j) {
+    const t = type[i]; type[i] = type[j]; type[j] = t;
+    const e = extra[i]; extra[i] = extra[j]; extra[j] = e;
+    const s = seed[i]; seed[i] = seed[j]; seed[j] = s;
+    moved[i] = 1; moved[j] = 1;
+  }
+
+  function tryMoveTo(i, tx, ty, selfType) {
+    if (!inBounds(tx, ty)) return false;
+    const j = idx(tx, ty);
+    if (moved[j]) return false;
+    const other = type[j];
+    if (other === EMPTY) { swap(i, j); return true; }
+    if ((isLiquid(other) || isGas(other)) && density(selfType) > density(other)) {
+      swap(i, j); return true;
+    }
+    return false;
+  }
+
+  function rnd(a, b) { return (a + Math.random() * (b - a)) | 0; }
+  const order2 = () => Math.random() < 0.5 ? [-1, 1] : [1, -1];
+
+  // ---------- Update rules ----------
+  function updatePowder(x, y, i) {
+    if (tryMoveTo(i, x, y + 1, SAND)) return;
+    for (const dx of order2()) {
+      if (tryMoveTo(i, x + dx, y + 1, SAND)) return;
+    }
+  }
+
+  function updateLiquid(x, y, i, t) {
+    if (t === LAVA && Math.random() < 0.55) {
+      // viscosity: lava moves sluggishly
+    } else {
+      if (tryMoveTo(i, x, y + 1, t)) { handleLiquidNeighbors(x, y, i, t); return; }
+      for (const dx of order2()) {
+        if (tryMoveTo(i, x + dx, y + 1, t)) { handleLiquidNeighbors(x, y, i, t); return; }
+      }
+      const flow = (t === OIL || t === LAVA) ? 1 : 2;
+      for (const dx of order2()) {
+        for (let f = flow; f >= 1; f--) {
+          if (tryMoveTo(i, x + dx * f, y, t)) { handleLiquidNeighbors(x, y, i, t); return; }
+        }
+      }
+    }
+    handleLiquidNeighbors(x, y, i, t);
+  }
+
+  const N4 = [[1,0],[-1,0],[0,1],[0,-1]];
+
+  function handleLiquidNeighbors(x, y, i, t) {
+    if (type[i] === EMPTY) return; // already consumed this tick
+    if (t === LAVA) {
+      for (const [dx, dy] of N4) {
+        const nx = x + dx, ny = y + dy;
+        if (!inBounds(nx, ny)) continue;
+        const j = idx(nx, ny);
+        const nt = type[j];
+        if (nt === WATER && Math.random() < 0.5) {
+          setCell(j, STEAM, rnd(50, 90));
+          if (Math.random() < 0.35) setCell(i, STONE);
+        } else if (nt === ICE && Math.random() < 0.6) {
+          setCell(j, WATER);
+        } else if (isFlammable(nt) && Math.random() < 0.15) {
+          setCell(j, FIRE, rnd(25, 45));
+        }
+      }
+    } else if (t === ACID) {
+      for (const [dx, dy] of N4) {
+        const nx = x + dx, ny = y + dy;
+        if (!inBounds(nx, ny)) continue;
+        const j = idx(nx, ny);
+        const nt = type[j];
+        if ((nt === SAND || nt === WOOD || nt === PLANT || nt === ICE) && Math.random() < 0.06) {
+          setCell(j, EMPTY);
+          if (Math.random() < 0.5) setCell(i, EMPTY);
+          return;
+        }
+      }
+    }
+  }
+
+  function updateGas(x, y, i, t) {
+    extra[i]--;
+    if (extra[i] <= 0) {
+      if (t === STEAM) setCell(i, Math.random() < 0.5 ? WATER : EMPTY);
+      else setCell(i, EMPTY);
+      return;
+    }
+    const j1 = idx(x, y - 1);
+    if (inBounds(x, y - 1) && !moved[j1] && type[j1] === EMPTY) { swap(i, j1); return; }
+    for (const dx of order2()) {
+      const nx = x + dx, ny = y - 1;
+      if (!inBounds(nx, ny)) continue;
+      const j = idx(nx, ny);
+      if (!moved[j] && type[j] === EMPTY) { swap(i, j); return; }
+    }
+    for (const dx of order2()) {
+      const nx = x + dx;
+      if (!inBounds(nx, y)) continue;
+      const j = idx(nx, y);
+      if (!moved[j] && type[j] === EMPTY && Math.random() < 0.5) { swap(i, j); return; }
+    }
+  }
+
+  function updateFire(x, y, i) {
+    extra[i]--;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (!inBounds(nx, ny)) continue;
+      const j = idx(nx, ny);
+      const nt = type[j];
+      if (isFlammable(nt) && Math.random() < 0.10) {
+        setCell(j, FIRE, rnd(20, 40));
+      } else if (nt === WATER) {
+        setCell(j, STEAM, rnd(40, 70));
+        extra[i] = Math.min(extra[i], 3);
+      } else if (nt === ICE && Math.random() < 0.3) {
+        setCell(j, WATER);
+      }
+    }
+    if (extra[i] <= 0) {
+      setCell(i, Math.random() < 0.55 ? SMOKE : EMPTY, rnd(70, 130));
+      return;
+    }
+    if (Math.random() < 0.6) {
+      const opts = [[0,-1],[-1,-1],[1,-1],[-1,0],[1,0]];
+      const [dx, dy] = opts[(Math.random() * opts.length) | 0];
+      const nx = x + dx, ny = y + dy;
+      if (inBounds(nx, ny)) {
+        const j = idx(nx, ny);
+        if (!moved[j] && type[j] === EMPTY) swap(i, j);
+      }
+    }
+  }
+
+  function updateStaticFlammable(x, y, i, t) {
+    for (const [dx, dy] of N4) {
+      const nx = x + dx, ny = y + dy;
+      if (!inBounds(nx, ny)) continue;
+      const nt = type[idx(nx, ny)];
+      if ((nt === FIRE || nt === LAVA) && Math.random() < 0.05) {
+        setCell(i, FIRE, rnd(25, 45));
+        return;
+      }
+    }
+    if (t === PLANT && Math.random() < 0.004) {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      const [dx, dy] = dirs[(Math.random() * dirs.length) | 0];
+      const nx = x + dx, ny = y + dy;
+      if (inBounds(nx, ny) && type[idx(nx, ny)] === EMPTY) {
+        let nearWater = false;
+        for (const [ddx, ddy] of N4) {
+          const wx = nx + ddx, wy = ny + ddy;
+          if (inBounds(wx, wy) && type[idx(wx, wy)] === WATER) { nearWater = true; break; }
+        }
+        if (nearWater) setCell(idx(nx, ny), PLANT);
+      }
+    }
+  }
+
+  function updateIce(x, y, i) {
+    for (const [dx, dy] of N4) {
+      const nx = x + dx, ny = y + dy;
+      if (!inBounds(nx, ny)) continue;
+      const nt = type[idx(nx, ny)];
+      if ((nt === FIRE || nt === LAVA) && Math.random() < 0.15) {
+        setCell(i, WATER);
+        return;
+      }
+    }
+  }
+
+  function updateCell(x, y) {
+    const i = idx(x, y);
+    if (moved[i]) return;
+    const t = type[i];
+    if (t === EMPTY || t === STONE) return;
+    switch (t) {
+      case SAND: updatePowder(x, y, i); break;
+      case WATER: case OIL: case ACID: case LAVA: updateLiquid(x, y, i, t); break;
+      case SMOKE: case STEAM: updateGas(x, y, i, t); break;
+      case FIRE: updateFire(x, y, i); break;
+      case WOOD: case PLANT: updateStaticFlammable(x, y, i, t); break;
+      case ICE: updateIce(x, y, i); break;
+    }
+  }
+
+  function step() {
+    moved.fill(0);
+    for (let y = H - 1; y >= 0; y--) {
+      if (Math.random() < 0.5) {
+        for (let x = 0; x < W; x++) updateCell(x, y);
+      } else {
+        for (let x = W - 1; x >= 0; x--) updateCell(x, y);
+      }
+    }
+  }
+
+  // ---------- Rendering ----------
+  const view = document.getElementById("view");
+  view.width = W * CELL;
+  view.height = H * CELL;
+  const ctx = view.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  const off = document.createElement("canvas");
+  off.width = W; off.height = H;
+  const octx = off.getContext("2d");
+  const imgData = octx.createImageData(W, H);
+  const buf = imgData.data;
+
+  const colorOf = {};
+  for (const el of ELEMENTS) colorOf[el.id] = el.color;
+
+  function render() {
+    for (let i = 0; i < N; i++) {
+      const t = type[i];
+      let r, g, b;
+      if (t === EMPTY) {
+        r = 11; g = 14; b = 20;
+      } else {
+        const c = colorOf[t];
+        let n;
+        if (t === FIRE || t === LAVA) {
+          n = (Math.random() * 60 - 20) | 0;
+        } else {
+          n = (seed[i] % 24) - 12;
+        }
+        r = clamp8(c[0] + n);
+        g = clamp8(c[1] + n);
+        b = clamp8(c[2] + n);
+      }
+      const o = i * 4;
+      buf[o] = r; buf[o+1] = g; buf[o+2] = b; buf[o+3] = 255;
+    }
+    octx.putImageData(imgData, 0, 0);
+    ctx.clearRect(0, 0, view.width, view.height);
+    ctx.drawImage(off, 0, 0, view.width, view.height);
+  }
+  function clamp8(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+  // ---------- Brush / input ----------
+  let currentMat = SAND;
+  let brushSize = 4;
+  let painting = false;
+  let erasing = false;
+
+  function paintAt(cx, cy) {
+    const r = brushSize;
+    const mat = erasing ? EMPTY : currentMat;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx*dx + dy*dy > r*r) continue;
+        const x = cx + dx, y = cy + dy;
+        if (!inBounds(x, y)) continue;
+        if (Math.random() < 0.55 || r <= 2) {
+          const i = idx(x, y);
+          if (mat === EMPTY) { setCell(i, EMPTY); continue; }
+          let ex = 0;
+          if (mat === FIRE) ex = rnd(30, 60);
+          else if (mat === SMOKE) ex = rnd(80, 140);
+          else if (mat === STEAM) ex = rnd(60, 100);
+          setCell(i, mat, ex);
+        }
+      }
+    }
+  }
+
+  function canvasToCell(evt) {
+    const rect = view.getBoundingClientRect();
+    const px = (evt.clientX - rect.left) / rect.width * W;
+    const py = (evt.clientY - rect.top) / rect.height * H;
+    return [px | 0, py | 0];
+  }
+
+  view.addEventListener("contextmenu", e => e.preventDefault());
+  view.addEventListener("mousedown", e => {
+    painting = true;
+    erasing = e.button === 2;
+    const [x, y] = canvasToCell(e);
+    paintAt(x, y);
+  });
+  window.addEventListener("mouseup", () => painting = false);
+  view.addEventListener("mousemove", e => {
+    if (!painting) return;
+    const [x, y] = canvasToCell(e);
+    paintAt(x, y);
+  });
+  view.addEventListener("touchstart", e => {
+    e.preventDefault();
+    painting = true; erasing = false;
+    const t = e.touches[0];
+    const [x, y] = canvasToCell(t);
+    paintAt(x, y);
+  }, { passive: false });
+  view.addEventListener("touchmove", e => {
+    e.preventDefault();
+    if (!painting) return;
+    const t = e.touches[0];
+    const [x, y] = canvasToCell(t);
+    paintAt(x, y);
+  }, { passive: false });
+  window.addEventListener("touchend", () => painting = false);
+
+  // ---------- UI wiring ----------
+  const palette = document.getElementById("palette");
+  const curMatLabel = document.getElementById("curMat");
+  const allButtons = [];
+
+  function makeButton(el) {
+    const btn = document.createElement("button");
+    btn.className = "elbtn";
+    btn.innerHTML = `<span class="swatch" style="background: rgb(${el.color.join(",")})"></span>${el.name}<span class="key">${el.key}</span>`;
+    btn.addEventListener("click", () => selectMaterial(el));
+    palette.appendChild(btn);
+    allButtons.push({ el, btn });
+  }
+  for (const el of ELEMENTS) makeButton(el);
+  makeButton(ERASER);
+
+  function selectMaterial(el) {
+    if (el.id === EMPTY) { erasing = true; }
+    else { erasing = false; currentMat = el.id; }
+    curMatLabel.textContent = el.name;
+    for (const { el: e, btn } of allButtons) {
+      btn.classList.toggle("active", e === el);
+    }
+  }
+  selectMaterial(ELEMENTS[0]);
+
+  const brushSizeInput = document.getElementById("brushSize");
+  const brushSizeLabel = document.getElementById("brushSizeLabel");
+  brushSizeInput.addEventListener("input", () => {
+    brushSize = parseInt(brushSizeInput.value, 10);
+    brushSizeLabel.textContent = brushSize;
+  });
+
+  let running = true;
+  const playBtn = document.getElementById("playBtn");
+  playBtn.addEventListener("click", () => {
+    running = !running;
+    playBtn.textContent = running ? "Pause" : "Play";
+  });
+  document.getElementById("stepBtn").addEventListener("click", () => { step(); render(); });
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    type.fill(EMPTY); extra.fill(0); seed.fill(0); render();
+  });
+  document.getElementById("wallsBtn").addEventListener("click", () => {
+    for (let x = 0; x < W; x++) {
+      setCell(idx(x, H - 1), STONE);
+      setCell(idx(x, 0), STONE);
+    }
+    for (let y = 0; y < H; y++) {
+      setCell(idx(0, y), STONE);
+      setCell(idx(W - 1, y), STONE);
+    }
+  });
+
+  const speedInput = document.getElementById("speed");
+  const speedLabel = document.getElementById("speedLabel");
+  let speed = 1;
+  speedInput.addEventListener("input", () => {
+    speed = parseInt(speedInput.value, 10);
+    speedLabel.textContent = speed + "x";
+  });
+
+  window.addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); playBtn.click(); return; }
+    if (e.key === "c" || e.key === "C") { document.getElementById("clearBtn").click(); return; }
+    if (e.key === "." ) { document.getElementById("stepBtn").click(); return; }
+    if (e.key === "[") { brushSizeInput.value = Math.max(1, brushSize - 1); brushSizeInput.dispatchEvent(new Event("input")); return; }
+    if (e.key === "]") { brushSizeInput.value = Math.min(20, brushSize + 1); brushSizeInput.dispatchEvent(new Event("input")); return; }
+    const match = [...ELEMENTS, ERASER].find(el => el.key.toLowerCase() === e.key.toLowerCase());
+    if (match) selectMaterial(match);
+  });
+
+  // ---------- Seed scene ----------
+  function seedScene() {
+    for (let x = 0; x < W; x++) {
+      setCell(idx(x, H - 1), STONE);
+    }
+    for (let x = 20; x < 60; x++) setCell(idx(x, H - 20), STONE);
+    for (let y = H - 40; y < H - 20; y++) setCell(idx(60, y), STONE);
+  }
+  seedScene();
+
+  // ---------- Main loop ----------
+  const fpsLabel = document.getElementById("fps");
+  const countLabel = document.getElementById("count");
+  let lastT = performance.now();
+  let frames = 0;
+  let fpsAccum = 0;
+
+  function frame(now) {
+    const dt = now - lastT;
+    lastT = now;
+    fpsAccum += dt;
+    frames++;
+    if (fpsAccum >= 500) {
+      fpsLabel.textContent = (1000 / (fpsAccum / frames)).toFixed(0);
+      fpsAccum = 0; frames = 0;
+      let c = 0;
+      for (let i = 0; i < N; i++) if (type[i] !== EMPTY) c++;
+      countLabel.textContent = c;
+    }
+    if (running) {
+      for (let s = 0; s < speed; s++) step();
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

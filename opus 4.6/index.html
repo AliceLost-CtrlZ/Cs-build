@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Life</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div id="controls">
+        <div class="hdr">
+            <h2>Particle Life</h2>
+            <button id="tog" title="Collapse">&#x25BC;</button>
+        </div>
+        <div class="body" id="panel">
+            <div class="sec">
+                <div class="sec-label">Presets</div>
+                <div class="presets">
+                    <button data-p="random">Random</button>
+                    <button data-p="snakes">Snakes</button>
+                    <button data-p="clusters">Clusters</button>
+                    <button data-p="chains">Chains</button>
+                    <button data-p="sym">Symmetry</button>
+                </div>
+            </div>
+            <div class="sec">
+                <div class="sec-label">Attraction Matrix</div>
+                <div class="hint">Click to increase, right-click to decrease</div>
+                <div id="matrix-wrap"></div>
+            </div>
+            <div class="sec">
+                <div class="sec-label">Parameters</div>
+                <div class="row"><span class="lbl">Particles / species</span><input type="range" id="s-count" min="20" max="300" value="120"><span class="val" id="v-count">120</span></div>
+                <div class="row"><span class="lbl">Friction</span><input type="range" id="s-fric" min="0" max="100" value="50"><span class="val" id="v-fric">0.50</span></div>
+                <div class="row"><span class="lbl">Radius</span><input type="range" id="s-rad" min="30" max="250" value="100"><span class="val" id="v-rad">100</span></div>
+                <div class="row"><span class="lbl">Strength</span><input type="range" id="s-str" min="1" max="20" value="5"><span class="val" id="v-str">5</span></div>
+                <div class="row"><span class="lbl">Trails</span><input type="range" id="s-trail" min="0" max="98" value="70"><span class="val" id="v-trail">70</span></div>
+            </div>
+            <div class="sec">
+                <label class="chk"><input type="checkbox" id="c-wrap"> Wrap edges</label>
+                <label class="chk"><input type="checkbox" id="c-pause"> Paused</label>
+            </div>
+            <div class="sec">
+                <button class="btn-reset" id="btn-reset">Reset Particles</button>
+            </div>
+            <div class="fps" id="fps">-- fps</div>
+        </div>
+    </div>
+
+    <div id="toast">Click &amp; drag to push particles &middot; <kbd>H</kbd> toggle panel &middot; <kbd>Space</kbd> pause</div>
+
+    <script src="app.js"></script>
+</body>
+</html>

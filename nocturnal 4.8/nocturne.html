@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nocturne</title>
+<style>
+  :root{
+    --void:#080b14;
+    --deep:#0c1122;
+    --mist:#9fb4d6;
+    --mist-dim:#5f6f92;
+    --line:rgba(159,180,214,.14);
+    --panel:rgba(10,15,30,.44);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--void);
+    color:var(--mist);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  #stage{position:fixed;inset:0;display:block;touch-action:none;cursor:crosshair}
+
+  .hud{
+    position:fixed;top:clamp(16px,3vw,34px);left:clamp(16px,3vw,34px);
+    z-index:10;max-width:min(78vw,340px);
+    pointer-events:none;
+  }
+  .title{
+    font-family:Georgia,"Times New Roman",serif;
+    font-style:italic;font-weight:400;
+    font-size:clamp(30px,6vw,46px);
+    line-height:.98;letter-spacing:.01em;
+    color:#eaf1ff;margin:0;
+    text-wrap:balance;
+    text-shadow:0 0 26px rgba(111,233,255,.28),0 2px 20px rgba(0,0,0,.6);
+  }
+  .tag{
+    margin:.7em 0 0;font-size:11.5px;line-height:1.5;
+    letter-spacing:.02em;color:var(--mist);max-width:30ch;
+  }
+  .seeds{
+    margin-top:18px;display:flex;flex-wrap:wrap;gap:7px;
+    pointer-events:auto;
+  }
+  .seed{
+    appearance:none;border:1px solid var(--line);
+    background:var(--panel);color:var(--mist-dim);
+    backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
+    font:inherit;font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    padding:7px 11px 7px 9px;border-radius:100px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:7px;
+    transition:color .25s,border-color .25s,background .25s,transform .12s;
+  }
+  .seed:hover{color:var(--mist);border-color:rgba(159,180,214,.3)}
+  .seed:active{transform:translateY(1px)}
+  .seed .dot{
+    width:8px;height:8px;border-radius:50%;
+    background:var(--c);box-shadow:0 0 9px 1px var(--c);
+    transition:transform .25s;
+  }
+  .seed[aria-pressed="true"]{
+    color:#eef4ff;border-color:var(--c);
+    background:rgba(16,24,44,.6);
+  }
+  .seed[aria-pressed="true"] .dot{transform:scale(1.25)}
+  .seed:focus-visible{outline:2px solid #6fe9ff;outline-offset:2px}
+
+  .foot{
+    position:fixed;left:clamp(16px,3vw,34px);bottom:clamp(14px,3vw,28px);
+    z-index:10;font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--mist-dim);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  }
+  .foot b{color:var(--mist);font-weight:400;font-variant-numeric:tabular-nums}
+  .clear{
+    pointer-events:auto;color:var(--mist-dim);text-decoration:none;
+    border-bottom:1px solid transparent;cursor:pointer;transition:color .2s,border-color .2s;
+  }
+  .clear:hover{color:var(--mist);border-color:var(--line)}
+  .credit{
+    position:fixed;right:clamp(16px,3vw,30px);bottom:clamp(14px,3vw,26px);
+    z-index:10;font-family:Georgia,serif;font-style:italic;font-size:12px;
+    color:var(--mist-dim);opacity:.72;text-align:right;pointer-events:none;
+  }
+  @media (max-width:560px){
+    .credit{display:none}
+    .tag{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="hud">
+  <h1 class="title">Nocturne</h1>
+  <p class="tag">A garden that only grows after dark. Click anywhere to plant &mdash; it will find its own shape.</p>
+  <div class="seeds" id="seeds"></div>
+</div>
+
+<div class="foot">
+  <span><b id="n-plants">0</b> seedlings</span>
+  <span><b id="n-flies">0</b> fireflies</span>
+  <span class="clear" id="clear" role="button" tabindex="0">clear the field</span>
+</div>
+<div class="credit">made for no one,<br>on a free evening</div>
+
+<script>
+(() => {
+  "use strict";
+  const REDUCE = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const canvas = document.getElementById("stage");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  function resize(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    seedStars();
+  }
+  window.addEventListener("resize", resize);
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[(Math.random() * arr.length) | 0];
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const smooth = t => t * t * (3 - 2 * t);
+
+  // ---- species -----------------------------------------------------------
+  const SPECIES = {
+    lumen:      { label:"Lumen",      bloom:"#6fe9ff", stem:"#2f6f6a",
+                  len:64, depth:6, spread:0.30, kids:[2,2], taper:0.70,
+                  bloomR:[3.2,5.0], midBloom:0 },
+    fernlight:  { label:"Fernlight",  bloom:"#bff56a", stem:"#3a6b32",
+                  len:44, depth:6, spread:0.46, kids:[2,3], taper:0.66,
+                  bloomR:[1.8,3.0], midBloom:0.12 },
+    bellflower: { label:"Bellflower", bloom:"#ff9ecf", stem:"#4a5a7a",
+                  len:52, depth:5, spread:0.34, kids:[1,2], taper:0.72,
+                  bloomR:[4.2,6.6], midBloom:0.4 },
+    wild:       { label:"Wild", bloom:"#c8b8ff", stem:"#556" }
+  };
+  const SEED_ORDER = ["lumen","fernlight","bellflower","wild"];
+  let current = "lumen";
+
+  function speciesFor(name){
+    if (name !== "wild") return SPECIES[name];
+    const base = SPECIES[pick(["lumen","fernlight","bellflower"])];
+    const hues = ["#6fe9ff","#bff56a","#ff9ecf","#c8b8ff","#ffcf6f","#8affc0"];
+    return Object.assign({}, base, { bloom: pick(hues) });
+  }
+
+  // ---- plant generation --------------------------------------------------
+  function build(node, px, py, ang, len, width, depth, t0, t1, sp, refH){
+    const x2 = px + Math.sin(ang) * len;
+    const y2 = py - Math.cos(ang) * len;
+    const segEnd = t0 + (t1 - t0) * 0.42;
+    node.segs.push({ x1:px, y1:py, x2, y2, w:width, t0, t1:segEnd });
+
+    // mid-stem blooms (bellflower / fern flavour)
+    if (sp.midBloom && Math.random() < sp.midBloom && depth < sp.depth){
+      node.blooms.push({ x:(px+x2)/2, y:(py+y2)/2, t:segEnd,
+        r:rand(sp.bloomR[0], sp.bloomR[1])*0.7, ph:rand(0,6.28), droop:true });
+    }
+
+    if (depth <= 1 || len < 9){
+      node.blooms.push({ x:x2, y:y2, t:segEnd,
+        r:rand(sp.bloomR[0], sp.bloomR[1]), ph:rand(0,6.28), terminal:true });
+      return;
+    }
+    const n = (sp.kids[0] + ((Math.random() * (sp.kids[1]-sp.kids[0]+1))|0));
+    for (let i=0;i<n;i++){
+      const off = n === 1 ? rand(-0.4,0.4) : (i - (n-1)/2);
+      const childAng = ang + sp.spread*off + rand(-0.14,0.14);
+      const childLen = len * rand(0.68, 0.80);
+      build(node, x2, y2, childAng, childLen, width*sp.taper,
+            depth-1, segEnd, t1, sp, refH);
+    }
+  }
+
+  function makePlant(x, y){
+    const sp = speciesFor(current);
+    const sizeF = clamp((y / H), 0, 1) * 0.85 + 0.5;   // lower = nearer = larger
+    const node = { segs:[], blooms:[], baseX:x, baseY:y, sp,
+      born: performance.now(), dur: REDUCE ? 1 : rand(3800, 5600),
+      sway: rand(0, 6.28), swaySpeed: rand(0.5, 0.9), sizeF };
+    const len = sp.len * sizeF;
+    const w = clamp(2.6 * sizeF, 1.1, 3.4);
+    node.refH = len * 2.4;
+    build(node, x, y, rand(-0.05,0.05), len, w, sp.depth, 0, 1, sp, node.refH);
+    return node;
+  }
+
+  // ---- fireflies & motes -------------------------------------------------
+  function makeFly(){
+    return { x:rand(0,W), y:rand(0,H), vx:rand(-.25,.25), vy:rand(-.2,.2),
+      ph:rand(0,6.28), blink:rand(0,6.28), size:rand(1.1,2.0),
+      hue: pick(["#ffd27a","#ffe6a0","#bff56a"]) };
+  }
+  let flies = [], motes = [], stars = [];
+  function seedStars(){
+    const count = Math.round((W*H)/26000);
+    stars = [];
+    for (let i=0;i<count;i++)
+      stars.push({ x:rand(0,W), y:rand(0,H*0.9), r:rand(0.3,1.1),
+        a:rand(0.06,0.4), tw:rand(0,6.28) });
+  }
+  function seedMotes(){
+    motes = [];
+    const count = REDUCE ? 20 : 46;
+    for (let i=0;i<count;i++)
+      motes.push({ x:rand(0,W), y:rand(0,H), r:rand(0.4,1.4),
+        vy:rand(0.05,0.28), drift:rand(-0.12,0.12), a:rand(0.05,0.22),
+        ph:rand(0,6.28) });
+  }
+
+  // ---- world -------------------------------------------------------------
+  const plants = [];
+  const MAX = 70;
+  function plant(x, y){
+    plants.push(makePlant(x, y));
+    if (plants.length > MAX) plants.shift();
+    updateCounts();
+  }
+
+  // ---- drawing -----------------------------------------------------------
+  function swayX(p, base, refH, t){
+    const dy = Math.max(0, base.baseY - p.y);
+    const amp = REDUCE ? 0 : Math.pow(dy / refH, 1.4) * 9;
+    return p.x + amp * Math.sin(t * base.swaySpeed + base.sway + dy*0.01);
+  }
+
+  function drawBackground(t){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, "#0a0f1e");
+    g.addColorStop(0.55, "#080b16");
+    g.addColorStop(1, "#05070f");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    // soft aurora glow near the horizon
+    const hg = ctx.createRadialGradient(W*0.5, H*1.15, 40, W*0.5, H*1.15, H*0.9);
+    hg.addColorStop(0, "rgba(30,80,90,0.20)");
+    hg.addColorStop(1, "rgba(30,80,90,0)");
+    ctx.fillStyle = hg;
+    ctx.fillRect(0,0,W,H);
+
+    // stars
+    for (const s of stars){
+      const tw = REDUCE ? s.a : s.a * (0.6 + 0.4*Math.sin(t*0.8 + s.tw));
+      ctx.globalAlpha = tw;
+      ctx.fillStyle = "#dfeaff";
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // motes
+    ctx.globalCompositeOperation = "lighter";
+    for (const m of motes){
+      m.y -= m.vy; m.x += m.drift + Math.sin(t*0.3 + m.ph)*0.1;
+      if (m.y < -4){ m.y = H+4; m.x = rand(0,W); }
+      ctx.globalAlpha = m.a;
+      ctx.fillStyle = "#8fd6ff";
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawPlant(pl, now, t){
+    const p = clamp((now - pl.born) / pl.dur, 0, 1);
+    const growth = smooth(p);
+    const sp = pl.sp;
+
+    // stems
+    for (const s of pl.segs){
+      if (growth <= s.t0) continue;
+      const f = clamp((growth - s.t0) / (s.t1 - s.t0), 0, 1);
+      if (f <= 0) continue;
+      const p1 = { x: swayX({ x:s.x1, y:s.y1 }, pl, pl.refH, t), y: s.y1 };
+      const ex = s.x1 + (s.x2 - s.x1) * f;
+      const ey = s.y1 + (s.y2 - s.y1) * f;
+      const p2 = { x: swayX({x:ex,y:ey}, pl, pl.refH, t), y: ey };
+
+      ctx.lineCap = "round";
+      // faint outer glow of the stem
+      ctx.strokeStyle = sp.stem;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = s.w + 2.2;
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      // bright core
+      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = s.w;
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // blooms
+    ctx.globalCompositeOperation = "lighter";
+    for (const b of pl.blooms){
+      if (growth <= b.t) continue;
+      const in_ = clamp((growth - b.t) / 0.05, 0, 1);
+      const pulse = REDUCE ? 1 : 0.82 + 0.18*Math.sin(t*1.4 + b.ph);
+      const r = b.r * pl.sizeF * (0.4 + 0.6*in_) * pulse;
+      const cx = swayX(b, pl, pl.refH, t);
+      const cy = b.y + (b.droop ? Math.sin(t*0.8 + b.ph)*0.6 : 0);
+
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r*4.2);
+      g.addColorStop(0, sp.bloom);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = 0.55 * in_;
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r*4.2, 0, 6.2832); ctx.fill();
+
+      ctx.globalAlpha = in_;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(cx, cy, r*0.55, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = 0.9 * in_;
+      ctx.fillStyle = sp.bloom;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function drawFlies(t){
+    ctx.globalCompositeOperation = "lighter";
+    for (const f of flies){
+      const spd = REDUCE ? 0.25 : 1;
+      f.vx += Math.sin(t*0.7 + f.ph) * 0.008 * spd;
+      f.vy += Math.cos(t*0.6 + f.ph*1.3) * 0.008 * spd;
+      f.vx = clamp(f.vx, -0.5, 0.5); f.vy = clamp(f.vy, -0.45, 0.45);
+      f.x += f.vx * spd; f.y += f.vy * spd;
+      if (f.x < -20) f.x = W+20; if (f.x > W+20) f.x = -20;
+      if (f.y < -20) f.y = H+20; if (f.y > H+20) f.y = -20;
+
+      const blink = REDUCE ? 0.6 : (0.35 + 0.65*Math.pow(Math.max(0,Math.sin(t*1.1 + f.blink)),3));
+      const r = f.size;
+      const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r*9);
+      g.addColorStop(0, f.hue);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = 0.6 * blink;
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(f.x, f.y, r*9, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = blink;
+      ctx.fillStyle = "#fff7e0";
+      ctx.beginPath(); ctx.arc(f.x, f.y, r*0.6, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function vignette(){
+    const g = ctx.createRadialGradient(W/2, H*0.42, Math.min(W,H)*0.3, W/2, H*0.5, Math.max(W,H)*0.75);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,0.55)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // ---- loop --------------------------------------------------------------
+  let last = performance.now();
+  function frame(now){
+    const t = now / 1000;
+    drawBackground(t);
+    for (const pl of plants) drawPlant(pl, now, t);
+    drawFlies(t);
+    vignette();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- interaction -------------------------------------------------------
+  function pointer(e){
+    const r = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+    if (cy < 0 || cy > H) return;
+    plant(cx, cy);
+  }
+  canvas.addEventListener("pointerdown", pointer);
+
+  function updateCounts(){
+    document.getElementById("n-plants").textContent = plants.length;
+    document.getElementById("n-flies").textContent = flies.length;
+  }
+
+  // seed palette UI
+  const seedsEl = document.getElementById("seeds");
+  for (const name of SEED_ORDER){
+    const sp = SPECIES[name];
+    const b = document.createElement("button");
+    b.className = "seed";
+    b.type = "button";
+    b.style.setProperty("--c", sp.bloom);
+    b.setAttribute("aria-pressed", name === current ? "true" : "false");
+    b.innerHTML = `<span class="dot"></span>${sp.label}`;
+    b.addEventListener("click", () => {
+      current = name;
+      for (const el of seedsEl.children) el.setAttribute("aria-pressed","false");
+      b.setAttribute("aria-pressed","true");
+    });
+    seedsEl.appendChild(b);
+  }
+
+  const clearEl = document.getElementById("clear");
+  function clearField(){ plants.length = 0; updateCounts(); }
+  clearEl.addEventListener("click", clearField);
+  clearEl.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); clearField(); } });
+
+  // ---- boot --------------------------------------------------------------
+  resize();
+  seedMotes();
+  const flyCount = REDUCE ? 8 : 15;
+  for (let i=0;i<flyCount;i++) flies.push(makeFly());
+
+  // a few plants to open on, staggered so they rise in sequence
+  const opening = [
+    ["lumen",      0.20, 0.80],
+    ["fernlight",  0.40, 0.88],
+    ["bellflower", 0.62, 0.78],
+    ["lumen",      0.80, 0.86],
+    ["fernlight",  0.52, 0.94]
+  ];
+  let oi = 0;
+  (function openSeq(){
+    if (oi >= opening.length){ updateCounts(); return; }
+    const [name, fx, fy] = opening[oi++];
+    current = name;
+    plants.push(makePlant(fx * W, fy * H));
+    updateCounts();
+    // restore user's default selection after the opening
+    if (oi >= opening.length) current = "lumen";
+    setTimeout(openSeq, REDUCE ? 0 : 620);
+  })();
+
+  updateCounts();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
