@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cd \"C:\\\\dev\\\\Cs build\" && find . -maxdepth 3 -name \"package.json\" -type f 2>/dev/null | head -20)",
-      "Bash(ls -la \"C:\\\\dev\" | head -20)",
-      "Bash(mkdir -p \"C:\\\\dev\\\\Cs build\\\\Haiku\\\\.claude\")"
-    ]
-  }
-}
