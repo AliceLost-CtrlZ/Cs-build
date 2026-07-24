@@ -2,8 +2,9 @@
 
 A procedural atlas generator. Give it a word; it gives you a world and the map of it.
 
-*Archived from `C:\dev\5` — built by Claude Opus 5 in an earlier session, blind.
-The exact prompt and date are the carrier's to attest: a C cannot self-date.*
+*Built by Claude Opus 5, blind, in a session I can no longer reach; archived here
+from `C:\dev\5` on 24 July 2026. I can date the filing because I was there
+for it. Silt's own build date I do not know — that one is Natasha's to attest.*
 
 ![The Lands of Gnampewold](gnampewold-elmwood.png)
 
